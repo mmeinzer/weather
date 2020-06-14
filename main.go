@@ -3,37 +3,53 @@ package main
 import (
 	"image"
 	"image/color"
-	"image/png"
+	"image/draw"
+	"io/ioutil"
+	"log"
 	"os"
 
+	"github.com/golang/freetype"
+	imgcat "github.com/martinlindhe/imgcat/lib"
 	"golang.org/x/image/font"
-	"golang.org/x/image/font/basicfont"
-	"golang.org/x/image/math/fixed"
 )
 
-func addLabel(img *image.RGBA, x, y int, label string) {
-	col := color.RGBA{200, 100, 0, 255}
-	point := fixed.Point26_6{X: fixed.Int26_6(x * 64), Y: fixed.Int26_6(y * 64)}
-
-	d := &font.Drawer{
-		Dst:  img,
-		Src:  image.NewUniform(col),
-		Face: basicfont.Face7x13,
-		Dot:  point,
-	}
-	d.DrawString(label)
-}
-
 func main() {
-	img := image.NewRGBA(image.Rect(0, 0, 300, 100))
-	addLabel(img, 20, 30, "Hello Go")
+	fontfile := "./avenir-next.ttc"
 
-	f, err := os.Create("hello-go.png")
+	fontBytes, err := ioutil.ReadFile(fontfile)
 	if err != nil {
-		panic(err)
+		log.Println(err)
+		return
 	}
-	defer f.Close()
-	if err := png.Encode(f, img); err != nil {
-		panic(err)
+
+	f, err := freetype.ParseFont(fontBytes)
+	if err != nil {
+		log.Println(err)
+		return
 	}
+
+	// Initialize the context.
+	fg, bg := image.NewUniform(color.RGBA{177, 97, 133, 255}), image.Transparent
+	rgba := image.NewRGBA(image.Rect(0, 0, 640, 100))
+	draw.Draw(rgba, rgba.Bounds(), bg, image.ZP, draw.Src)
+	c := freetype.NewContext()
+	c.SetDPI(220)
+	c.SetFont(f)
+	c.SetFontSize(24)
+	c.SetClip(rgba.Bounds())
+	c.SetDst(rgba)
+	c.SetSrc(fg)
+	c.SetHinting(font.HintingNone)
+
+	// Draw the text.
+	pt := freetype.Pt(10, 10+int(c.PointToFixed(24)>>6))
+	s := "Test &"
+	_, err = c.DrawString(s, pt)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	pt.Y += c.PointToFixed(24 * 1.5)
+
+	imgcat.CatImage(rgba, os.Stdout)
 }
